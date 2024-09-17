@@ -1,7 +1,6 @@
 from sys import argv
-import numpy as np
 
-tape = np.zeros(shape=10000, dtype=np.int64)
+tape = [0] * 10000
 program = open(argv[1], "r").read()
 pairs = {}
 stack = []
