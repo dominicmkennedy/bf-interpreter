@@ -1,5 +1,6 @@
 from sys import argv
 from typing import Any
+import numpy as np
 
 prof = False
 if argv[1] == "-p":
@@ -10,7 +11,6 @@ raw_prog = open(f_name, "r").read()
 program: list[tuple[str, int]] = [(x, 0) for x in raw_prog if x in "+-><[].,"]
 
 
-# [aaaaaa[aa]aaaaa[aaaaa[aaaaa]aaaa]aaaaa]
 def make_pairs(program: list[tuple[str, int]]) -> tuple[dict[int, int], dict[int, int]]:
     queue: None | int = None
     stack: list[int] = []
@@ -31,7 +31,7 @@ def make_pairs(program: list[tuple[str, int]]) -> tuple[dict[int, int], dict[int
     return pairs, innermost
 
 
-tape = [0] * 10_000_000
+tape = np.zeros(10_000_000, dtype=np.uint8)
 pairs, innermost = make_pairs(program)
 (pc, dp) = (0, 0)
 
