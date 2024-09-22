@@ -94,92 +94,53 @@ fn print(f: &mut Function, js_log: u32) {
     f.instruction(&Instruction::Call(js_log));
 }
 
-// TODO higher order functions to dedup some of this backend code
-// fn add_or_sub(i: &Instruction) -> impl for<'a> FnOnce(&'a mut Function, usize) {
-//     |f: &mut Function, ct: usize| {
-//         f.instruction(&Instruction::LocalGet(0));
-//         f.instruction(&Instruction::LocalGet(0));
-//         f.instruction(&Instruction::I32Load8U(null_mem_arg()));
-//         f.instruction(&Instruction::I32Const(ct as i32));
-//         f.instruction(i);
-//         f.instruction(&Instruction::I32Store8(null_mem_arg()));
-//     }
-// }
-
-fn add(f: &mut Function, ct: usize) {
+fn add_or_sub(f: &mut Function, ct: usize, i: &Instruction) {
     f.instruction(&Instruction::LocalGet(0));
     f.instruction(&Instruction::LocalGet(0));
     f.instruction(&Instruction::I32Load8U(null_mem_arg()));
     f.instruction(&Instruction::I32Const(ct as i32));
-    f.instruction(&Instruction::I32Add);
+    f.instruction(i);
     f.instruction(&Instruction::I32Store8(null_mem_arg()));
 }
 
+fn add(f: &mut Function, ct: usize) {
+    add_or_sub(f, ct, &Instruction::I32Add);
+}
+
 fn sub(f: &mut Function, ct: usize) {
+    add_or_sub(f, ct, &Instruction::I32Sub);
+}
+
+fn add_or_sub_from(f: &mut Function, ct: usize, off: i32, i: &Instruction) {
+    // get offset number address
     f.instruction(&Instruction::LocalGet(0));
+    f.instruction(&Instruction::I32Const(off));
+    f.instruction(&Instruction::I32Add);
+    // get offset number
+    f.instruction(&Instruction::LocalGet(0));
+    f.instruction(&Instruction::I32Const(off));
+    f.instruction(&Instruction::I32Add);
+    f.instruction(&Instruction::I32Load8U(null_mem_arg()));
+    // get loop ct val
     f.instruction(&Instruction::LocalGet(0));
     f.instruction(&Instruction::I32Load8U(null_mem_arg()));
-    f.instruction(&Instruction::I32Const(ct as i32));
-    f.instruction(&Instruction::I32Sub);
+    // mul loop number by count
+    if ct != 0 {
+        f.instruction(&Instruction::I32Const(ct as i32));
+        f.instruction(&Instruction::I32Mul);
+    }
+    // add/sub offset number and mul'd loop ct
+    f.instruction(i);
+    // store new num at offset addr
     f.instruction(&Instruction::I32Store8(null_mem_arg()));
 }
 
 fn add_from(f: &mut Function, ct: usize, off: i32) {
-    // get offset number address
-    f.instruction(&Instruction::LocalGet(0));
-    f.instruction(&Instruction::I32Const(off));
-    f.instruction(&Instruction::I32Add);
-
-    // get offset number
-    f.instruction(&Instruction::LocalGet(0));
-    f.instruction(&Instruction::I32Const(off));
-    f.instruction(&Instruction::I32Add);
-    f.instruction(&Instruction::I32Load8U(null_mem_arg()));
-
-    // get loop ct val
-    f.instruction(&Instruction::LocalGet(0));
-    f.instruction(&Instruction::I32Load8U(null_mem_arg()));
-
-    // mul loop number by count
-    if ct != 0 {
-        f.instruction(&Instruction::I32Const(ct as i32));
-        f.instruction(&Instruction::I32Mul);
-    }
-
-    // add offset number and mul'd loop ct
-    f.instruction(&Instruction::I32Add);
-
-    // store new num at offset addr
-    f.instruction(&Instruction::I32Store8(null_mem_arg()));
+    add_or_sub_from(f, ct, off, &Instruction::I32Add)
 }
 
 fn sub_from(f: &mut Function, ct: usize, off: i32) {
-    // get offset number address
-    f.instruction(&Instruction::LocalGet(0));
-    f.instruction(&Instruction::I32Const(off));
-    f.instruction(&Instruction::I32Add);
-
-    // get offset number
-    f.instruction(&Instruction::LocalGet(0));
-    f.instruction(&Instruction::I32Const(off));
-    f.instruction(&Instruction::I32Add);
-    f.instruction(&Instruction::I32Load8U(null_mem_arg()));
-
-    // get loop number
-    f.instruction(&Instruction::LocalGet(0));
-    f.instruction(&Instruction::I32Load8U(null_mem_arg()));
-
-    // mul loop number by count
-    if ct != 0 {
-        f.instruction(&Instruction::I32Const(ct as i32));
-        f.instruction(&Instruction::I32Mul);
-    }
-
-    // add offset number and mul'd loop ct
-    f.instruction(&Instruction::I32Sub);
-
-    // store new num at offset addr
-    f.instruction(&Instruction::I32Store8(null_mem_arg()));
+    add_or_sub_from(f, ct, off, &Instruction::I32Sub)
 }
 
 // TODO opt for [>] and [<]
