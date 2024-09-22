@@ -190,7 +190,6 @@ pub fn cell_zero(ir: &IR) -> IR {
             if *i0 == Inst::LoopStart && *i2 == Inst::LoopEnd {
                 match i1 {
                     Inst::Add(_) | Inst::Sub(_) => {
-                        println!("{:?}", new_ir);
                         new_ir = [
                             &new_ir[0..idx - offset],
                             &[Inst::Zero(0)],
