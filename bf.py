@@ -55,7 +55,7 @@ def loop_ans(x: tuple[int, int]) -> tuple[bool, str]:
             if loop_ptr_has_changed:
                 return False, loop_ins
             else:
-                loop_ptr_has_changed = True, loop_ins
+                loop_ptr_has_changed = True
 
     # no net ptr movements
     if ptr_change != 0:
