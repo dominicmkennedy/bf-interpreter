@@ -3,7 +3,7 @@ use wasm_encoder::{
     Instruction, MemArg, MemorySection, MemoryType, Module, TypeSection, ValType,
 };
 
-use crate::ir::{IR, Inst};
+use crate::ir::{Inst, IR};
 
 pub fn create_wasm(ir: &IR) -> Vec<u8> {
     let mut module = Module::new();
@@ -45,18 +45,22 @@ pub fn create_wasm(ir: &IR) -> Vec<u8> {
     let locals = vec![(1, ValType::I32)];
     let mut f = Function::new(locals);
 
-    for (ins, ct) in ir {
+    for ins in ir {
         match ins {
-            Inst::Add => add(&mut f, *ct),
-            Inst::Sub => sub(&mut f, *ct),
-            Inst::Right => dp_r(&mut f, *ct),
-            Inst::Left => dp_l(&mut f, *ct),
+            Inst::Add(ct) => add(&mut f, *ct),
+            Inst::Sub(ct) => sub(&mut f, *ct),
+            Inst::AddFrom(ct, off) => add_from(&mut f, *ct, *off),
+            Inst::SubFrom(ct, off) => sub_from(&mut f, *ct, *off),
+            Inst::Right(ct) => dp_r(&mut f, *ct),
+            Inst::Left(ct) => dp_l(&mut f, *ct),
             Inst::LoopStart => loop_start(&mut f),
             Inst::LoopEnd => loop_end(&mut f),
-            Inst::Zero => set_0(&mut f),
+            Inst::Zero(off) => set_0(&mut f, *off),
             Inst::Nop => (),
             Inst::Out => print(&mut f, js_log),
             Inst::In => assert!(false),
+            Inst::SimpleLoopStart(off) => simple_loop_start(&mut f, *off),
+            Inst::SimpleLoopEnd => simple_loop_end(&mut f),
         }
     }
 
@@ -90,6 +94,18 @@ fn print(f: &mut Function, js_log: u32) {
     f.instruction(&Instruction::Call(js_log));
 }
 
+// TODO higher order functions to dedup some of this backend code
+// fn add_or_sub(i: &Instruction) -> impl for<'a> FnOnce(&'a mut Function, usize) {
+//     |f: &mut Function, ct: usize| {
+//         f.instruction(&Instruction::LocalGet(0));
+//         f.instruction(&Instruction::LocalGet(0));
+//         f.instruction(&Instruction::I32Load8U(null_mem_arg()));
+//         f.instruction(&Instruction::I32Const(ct as i32));
+//         f.instruction(i);
+//         f.instruction(&Instruction::I32Store8(null_mem_arg()));
+//     }
+// }
+
 fn add(f: &mut Function, ct: usize) {
     f.instruction(&Instruction::LocalGet(0));
     f.instruction(&Instruction::LocalGet(0));
@@ -108,6 +124,64 @@ fn sub(f: &mut Function, ct: usize) {
     f.instruction(&Instruction::I32Store8(null_mem_arg()));
 }
 
+fn add_from(f: &mut Function, ct: usize, off: i32) {
+    // get offset number address
+    f.instruction(&Instruction::LocalGet(0));
+    f.instruction(&Instruction::I32Const(off));
+    f.instruction(&Instruction::I32Add);
+
+    // get offset number
+    f.instruction(&Instruction::LocalGet(0));
+    f.instruction(&Instruction::I32Const(off));
+    f.instruction(&Instruction::I32Add);
+    f.instruction(&Instruction::I32Load8U(null_mem_arg()));
+
+    // get loop ct val
+    f.instruction(&Instruction::LocalGet(0));
+    f.instruction(&Instruction::I32Load8U(null_mem_arg()));
+
+    // mul loop number by count
+    if ct != 0 {
+        f.instruction(&Instruction::I32Const(ct as i32));
+        f.instruction(&Instruction::I32Mul);
+    }
+
+    // add offset number and mul'd loop ct
+    f.instruction(&Instruction::I32Add);
+
+    // store new num at offset addr
+    f.instruction(&Instruction::I32Store8(null_mem_arg()));
+}
+
+fn sub_from(f: &mut Function, ct: usize, off: i32) {
+    // get offset number address
+    f.instruction(&Instruction::LocalGet(0));
+    f.instruction(&Instruction::I32Const(off));
+    f.instruction(&Instruction::I32Add);
+
+    // get offset number
+    f.instruction(&Instruction::LocalGet(0));
+    f.instruction(&Instruction::I32Const(off));
+    f.instruction(&Instruction::I32Add);
+    f.instruction(&Instruction::I32Load8U(null_mem_arg()));
+
+    // get loop number
+    f.instruction(&Instruction::LocalGet(0));
+    f.instruction(&Instruction::I32Load8U(null_mem_arg()));
+
+    // mul loop number by count
+    if ct != 0 {
+        f.instruction(&Instruction::I32Const(ct as i32));
+        f.instruction(&Instruction::I32Mul);
+    }
+
+    // add offset number and mul'd loop ct
+    f.instruction(&Instruction::I32Sub);
+
+    // store new num at offset addr
+    f.instruction(&Instruction::I32Store8(null_mem_arg()));
+}
+
 // TODO opt for [>] and [<]
 // fn scan(f: &mut Function) {
 //     f.instruction(&Instruction::LocalGet(0));
@@ -116,23 +190,31 @@ fn sub(f: &mut Function, ct: usize) {
 //     f.instruction(&Instruction::I32Eqz);
 // }
 
-fn set_0(f: &mut Function) {
+fn set_0(f: &mut Function, off: i32) {
     f.instruction(&Instruction::LocalGet(0));
+    if off != 0 {
+        f.instruction(&Instruction::I32Const(off));
+        f.instruction(&Instruction::I32Add);
+    }
     f.instruction(&Instruction::I32Const(0));
     f.instruction(&Instruction::I32Store8(null_mem_arg()));
 }
 
 fn dp_r(f: &mut Function, ct: usize) {
     f.instruction(&Instruction::LocalGet(0));
-    f.instruction(&Instruction::I32Const(ct as i32));
-    f.instruction(&Instruction::I32Add);
+    if ct != 0 {
+        f.instruction(&Instruction::I32Const(ct as i32));
+        f.instruction(&Instruction::I32Add);
+    }
     f.instruction(&Instruction::LocalSet(0));
 }
 
 fn dp_l(f: &mut Function, ct: usize) {
     f.instruction(&Instruction::LocalGet(0));
-    f.instruction(&Instruction::I32Const(ct as i32));
-    f.instruction(&Instruction::I32Sub);
+    if ct != 0 {
+        f.instruction(&Instruction::I32Const(ct as i32));
+        f.instruction(&Instruction::I32Sub);
+    }
     f.instruction(&Instruction::LocalSet(0));
 }
 
@@ -148,5 +230,21 @@ fn loop_start(f: &mut Function) {
 fn loop_end(f: &mut Function) {
     f.instruction(&Instruction::Br(0));
     f.instruction(&Instruction::End);
+    f.instruction(&Instruction::End);
+}
+
+fn simple_loop_start(f: &mut Function, off: i32) {
+    f.instruction(&Instruction::Block(BlockType::Empty));
+    f.instruction(&Instruction::LocalGet(0));
+    if off != 0 {
+        f.instruction(&Instruction::I32Const(off));
+        f.instruction(&Instruction::I32Add);
+    }
+    f.instruction(&Instruction::I32Load8U(null_mem_arg()));
+    f.instruction(&Instruction::I32Eqz);
+    f.instruction(&Instruction::BrIf(0));
+}
+
+fn simple_loop_end(f: &mut Function) {
     f.instruction(&Instruction::End);
 }
