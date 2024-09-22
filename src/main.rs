@@ -1,5 +1,4 @@
-use regex::Regex;
-use std::collections::HashMap;
+use ir::cell_zero;
 use std::env;
 use std::error::Error;
 use std::{fs, usize};
@@ -7,6 +6,8 @@ use wasm_encoder::{
     BlockType, CodeSection, ExportKind, ExportSection, Function, FunctionSection, ImportSection,
     Instruction, MemArg, MemorySection, MemoryType, Module, TypeSection, ValType,
 };
+mod ir;
+use crate::ir::{inst_combine, parse, Inst};
 
 fn null_mem_arg() -> MemArg {
     MemArg {
@@ -83,132 +84,13 @@ fn loop_end(f: &mut Function) {
     f.instruction(&Instruction::End);
 }
 
-fn get_inner_loops(ir: &Vec<(Inst, usize)>) -> HashMap<usize, usize> {
-    let mut inner_loops: HashMap<usize, usize> = HashMap::new();
-    let mut top_paren: Option<usize> = None;
-    for (idx, (ins, _)) in ir.iter().enumerate() {
-        match ins {
-            Inst::LoopStart => top_paren = Some(idx),
-            Inst::LoopEnd => match top_paren {
-                None => (),
-                Some(x) => {
-                    inner_loops.insert(x, idx);
-                    top_paren = None;
-                }
-            },
-            _ => (),
-        }
-    }
-
-    inner_loops
-}
-
-fn is_simple(ir: &Vec<(Inst, usize)>, start: usize, end: usize) -> bool {
-    let loop_ins = &ir[start + 1..end];
-    let mut ret = true;
-
-    // TODO should be resiliant to the fact that i/o may be folded at some point
-    if loop_ins.contains(&(Inst::In, 1)) || loop_ins.contains(&(Inst::Out, 1)) {
-        ret = false;
-    }
-
-    let mut ptr_change: i32 = 0;
-    let mut loop_ptr_changed = false;
-    for (ins, ct) in loop_ins {
-        if *ins == Inst::Right {
-            ptr_change += *ct as i32;
-        }
-        if *ins == Inst::Left {
-            ptr_change -= *ct as i32;
-        }
-        // TODO this may break if the ir gets more complicated
-        if (*ins == Inst::Add || *ins == Inst::Sub) && ptr_change == 0 {
-            match loop_ptr_changed {
-                true => {
-                    ret = false;
-                }
-                false => {
-                    loop_ptr_changed = true;
-                }
-            }
-        }
-    }
-
-    if ptr_change != 0 {
-        ret = false;
-    }
-
-    ret
-}
-
-#[derive(PartialEq, Debug, Clone, Copy, Eq, PartialOrd, Ord)]
-enum Inst {
-    Add,
-    Sub,
-    Left,
-    Right,
-    In,
-    Out,
-    LoopStart,
-    LoopEnd,
-    Zero,
-    Nop,
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     let program: String = fs::read_to_string(args[1].clone())?;
 
-    let mut ir: Vec<(Inst, usize)> = vec![];
-    let mut idx = 0;
-    // TODO do a dumb translation from text into IR
-    // then add a step to that does the forward scans
-    // parsing and inst folding
-    while idx < program.len() {
-        match program.chars().nth(idx).unwrap() {
-            '+' => {
-                let m = Regex::new(r"\++").unwrap().find(&program[idx..]).unwrap();
-                ir.push((Inst::Add, m.len()));
-                idx += m.len() - 1;
-            }
-            '-' => {
-                let m = Regex::new(r"-+").unwrap().find(&program[idx..]).unwrap();
-                ir.push((Inst::Sub, m.len()));
-                idx += m.len() - 1;
-            }
-            '>' => {
-                let m = Regex::new(r">+").unwrap().find(&program[idx..]).unwrap();
-                ir.push((Inst::Right, m.len()));
-                idx += m.len() - 1;
-            }
-            '<' => {
-                let m = Regex::new(r"<+").unwrap().find(&program[idx..]).unwrap();
-                ir.push((Inst::Left, m.len()));
-                idx += m.len() - 1;
-            }
-            '[' => ir.push((Inst::LoopStart, 1)),
-            ']' => ir.push((Inst::LoopEnd, 1)),
-            '.' => ir.push((Inst::Out, 1)),
-            ',' => ir.push((Inst::In, 1)),
-            _ => (),
-        }
-
-        idx += 1;
-    }
-
-    // cell zeroing opt
-    for (idx, window) in ir.to_vec().windows(3).enumerate() {
-        if let [(i0, _), (i1, _), (i2, _)] = window {
-            if *i0 == Inst::LoopStart
-                && (*i1 == Inst::Add || *i1 == Inst::Sub)
-                && *i2 == Inst::LoopEnd
-            {
-                ir[idx] = (Inst::Zero, 1);
-                ir[idx + 1] = (Inst::Nop, 1);
-                ir[idx + 2] = (Inst::Nop, 1);
-            }
-        }
-    }
+    let mut ir = parse(&program);
+    ir = inst_combine(&ir);
+    cell_zero(&mut ir);
 
     // let inner_loops = get_inner_loops(&ir);
     // for (start, end) in inner_loops {
