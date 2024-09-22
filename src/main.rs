@@ -1,8 +1,9 @@
 use backend::create_wasm;
+use ir::Inst;
 use ir::{cell_zero, inst_combine, opt_simple_loops, parse};
+use std::env;
 use std::error::Error;
 use std::fs;
-use std::env;
 mod backend;
 mod ir;
 
@@ -12,17 +13,22 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut ir = parse(&program);
     ir = inst_combine(&ir);
-    cell_zero(&mut ir);
+    ir = cell_zero(&ir);
     ir = opt_simple_loops(&ir);
 
-    // let mut new_ir: Vec<Inst> = Vec::new();
-    // for ((start, end), new_loop) in replacements {
-    //     let air = [&ir[0..start], &new_loop, &ir[end + 1..]].concat();
-    // }
-
-    // for i in ir.to_vec() {
-    //     println!("{:?}", i);
-    // }
+    let mut loop_nest = 0;
+    for i in ir.to_vec() {
+        if i == Inst::LoopEnd {
+            loop_nest -= 1;
+        }
+        for _ in 0..loop_nest {
+            print!("\t");
+        }
+        println!("{:?}", i);
+        if i == Inst::LoopStart {
+            loop_nest += 1;
+        }
+    }
 
     let wasm_bytes = create_wasm(&ir);
 

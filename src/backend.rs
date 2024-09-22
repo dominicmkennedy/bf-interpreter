@@ -56,7 +56,6 @@ pub fn create_wasm(ir: &IR) -> Vec<u8> {
             Inst::LoopStart => loop_start(&mut f),
             Inst::LoopEnd => loop_end(&mut f),
             Inst::Zero(off) => set_0(&mut f, *off),
-            Inst::Nop => (),
             Inst::Out => print(&mut f, js_log),
             Inst::In => assert!(false),
             Inst::SimpleLoopStart(off) => simple_loop_start(&mut f, *off),

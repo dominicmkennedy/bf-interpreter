@@ -14,7 +14,6 @@ pub enum Inst {
     SimpleLoopStart(i32),
     SimpleLoopEnd,
     Zero(i32),
-    Nop, // TODO try and remove
 }
 
 pub type IR = Vec<Inst>;
@@ -98,7 +97,11 @@ fn single_loop_opt(ir: &IR) -> IR {
             Inst::Add(ct) => new_ir.push(Inst::AddFrom(*ct, dp)),
             Inst::Sub(ct) => new_ir.push(Inst::SubFrom(*ct, dp)),
             Inst::Zero(_) => new_ir.push(Inst::Zero(dp)),
-            Inst::Nop => (),
+            // TODO should be able to run this opt to a fixpoint but this impl is wrong
+            // Inst::SimpleLoopStart(off) => new_ir.push(Inst::SimpleLoopStart(dp + off)),
+            // Inst::SimpleLoopEnd => new_ir.push(Inst::SimpleLoopEnd),
+            // Inst::AddFrom(ct, off) => new_ir.push(Inst::AddFrom(*ct, dp + off)),
+            // Inst::SubFrom(ct, off) => new_ir.push(Inst::SubFrom(*ct, dp + off)),
             _ => {
                 println!("{:?}", i);
                 assert!(false)
@@ -179,21 +182,30 @@ pub fn opt_simple_loops(ir: &IR) -> IR {
 //    }
 //}
 
-pub fn cell_zero(ir: &mut IR) {
+pub fn cell_zero(ir: &IR) -> IR {
+    let mut new_ir = ir.clone();
+    let mut offset = 0;
     for (idx, window) in ir.to_vec().windows(3).enumerate() {
         if let [i0, i1, i2] = window {
             if *i0 == Inst::LoopStart && *i2 == Inst::LoopEnd {
                 match i1 {
                     Inst::Add(_) | Inst::Sub(_) => {
-                        ir[idx] = Inst::Zero(0);
-                        ir[idx + 1] = Inst::Nop;
-                        ir[idx + 2] = Inst::Nop;
+                        println!("{:?}", new_ir);
+                        new_ir = [
+                            &new_ir[0..idx - offset],
+                            &[Inst::Zero(0)],
+                            &new_ir[idx - offset + 3..],
+                        ]
+                        .concat();
+                        offset += 2;
                     }
                     _ => (),
                 }
             }
         }
     }
+
+    new_ir
 }
 
 pub fn get_inner_loops(ir: &IR) -> Vec<(usize, usize)> {
