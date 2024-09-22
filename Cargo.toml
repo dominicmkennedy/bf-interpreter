@@ -1,0 +1,9 @@
+[package]
+name = "bf-interpreter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+regex = "1.10.6"
+wasm-encoder = "0.217.0"
+wasmparser = "0.217.0"
