@@ -17,6 +17,7 @@ pub fn parse_prog(program: &str) {
 
 // TODO just for testing
 // #[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
 pub fn greet(x: &str) -> String {
     format!("Hello world {}", x)
 }

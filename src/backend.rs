@@ -12,12 +12,15 @@ pub fn create_wasm(ir: &IR) -> Vec<u8> {
     let mut types = TypeSection::new();
     types.function([ValType::I32], []);
     let js_log = types.len() - 1;
+    types.function([], [ValType::I32]);
+    let js_read = types.len() - 1;
     types.function([], []);
     let bf_main = types.len() - 1;
     module.section(&types);
 
     let mut imports = ImportSection::new();
     imports.import("env", "log", wasm_encoder::EntityType::Function(js_log));
+    imports.import("env", "read", wasm_encoder::EntityType::Function(js_read));
     module.section(&imports);
 
     // Encode the function section.
@@ -57,7 +60,7 @@ pub fn create_wasm(ir: &IR) -> Vec<u8> {
             Inst::LoopEnd => loop_end(&mut f),
             Inst::Zero(off) => set_0(&mut f, *off),
             Inst::Out => print(&mut f, js_log),
-            Inst::In => assert!(false),
+            Inst::In => read(&mut f, js_read),
             Inst::SimpleLoopStart(off) => simple_loop_start(&mut f, *off),
             Inst::SimpleLoopEnd => simple_loop_end(&mut f),
         }
@@ -85,6 +88,12 @@ fn null_mem_arg() -> MemArg {
         align: 0,
         memory_index: 0,
     }
+}
+
+fn read(f: &mut Function, js_read: u32) {
+    f.instruction(&Instruction::LocalGet(0));
+    f.instruction(&Instruction::Call(js_read));
+    f.instruction(&Instruction::I32Store8(null_mem_arg()));
 }
 
 fn print(f: &mut Function, js_log: u32) {
