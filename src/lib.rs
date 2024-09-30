@@ -1,19 +1,23 @@
 mod ir;
 use backend::create_wasm;
-use ir::parse;
+use ir::{cell_zero, inst_combine, opt_simple_loops, parse};
 mod backend;
+
+// TODO make a function for displaying the IR
+// TODO make the optimizations optional
 
 // #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 // #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
-pub fn parse_prog(program: &str) {
-    let ir = parse(&program.to_string());
-    let wasm_prog = create_wasm(&ir);
+pub fn compile(program: &str) -> Vec<u8> {
+    let mut ir = parse(&program.to_string());
+    ir = inst_combine(&ir);
+    ir = cell_zero(&ir);
+    ir = opt_simple_loops(&ir);
+    create_wasm(&ir)
 }
-
-// TODO make a function for displaying the IR
 
 // TODO just for testing
 // #[cfg(target_arch = "wasm32")]

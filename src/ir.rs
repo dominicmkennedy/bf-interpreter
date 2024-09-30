@@ -1,21 +1,23 @@
 #[derive(PartialEq, Debug, Clone, Copy, Eq, PartialOrd, Ord)]
 pub enum Inst {
     // SimpleLoop(Vec<Inst>, usize),
-    Add(usize), // TODO maybe add offset, or range
-    Sub(usize), // TODO maybe add offset, or range
-    AddFrom(usize, i32),
-    SubFrom(usize, i32),
-    Left(usize),
-    Right(usize),
+    Add(Count), // TODO maybe add offset, or range
+    Sub(Count), // TODO maybe add offset, or range
+    AddFrom(Count, Offset),
+    SubFrom(Count, Offset),
+    Left(Count),
+    Right(Count),
     In,
     Out,
     LoopStart,
     LoopEnd,
-    SimpleLoopStart(i32),
+    SimpleLoopStart(Offset),
     SimpleLoopEnd,
-    Zero(i32),
+    Zero(Offset),
 }
 
+type Offset = i32;
+type Count = usize;
 pub type IR = Vec<Inst>;
 
 pub fn parse(program: &String) -> IR {
@@ -90,12 +92,20 @@ pub fn inst_combine(ir: &IR) -> IR {
 fn single_loop_opt(ir: &IR) -> IR {
     let mut dp: i32 = 0;
     let mut new_ir: IR = vec![Inst::SimpleLoopStart(0)];
-    for i in &ir[1..] {
+    for i in ir {
         match i {
             Inst::Right(ct) => dp += *ct as i32,
             Inst::Left(ct) => dp -= *ct as i32,
-            Inst::Add(ct) => new_ir.push(Inst::AddFrom(*ct, dp)),
-            Inst::Sub(ct) => new_ir.push(Inst::SubFrom(*ct, dp)),
+            Inst::Add(ct) => {
+                if dp != 0 {
+                    new_ir.push(Inst::AddFrom(*ct, dp));
+                }
+            }
+            Inst::Sub(ct) => {
+                if dp != 0 {
+                    new_ir.push(Inst::SubFrom(*ct, dp))
+                }
+            }
             Inst::Zero(_) => new_ir.push(Inst::Zero(dp)),
             // TODO should be able to run this opt to a fixpoint but this impl is wrong
             // Inst::SimpleLoopStart(off) => new_ir.push(Inst::SimpleLoopStart(dp + off)),
@@ -137,50 +147,6 @@ pub fn opt_simple_loops(ir: &IR) -> IR {
 
     new_ir
 }
-
-// TODO this opt would work better if it was preceded by a cannonicolizer
-// TODO this code is also kind of a disaster
-// >>+>>+<<<< should be >>+<<>>>>+<<<<
-//pub fn offset_arth(ir: &mut IR) {
-//    for (idx, window) in ir.to_vec().windows(3).enumerate() {
-//        if let [i0, i1, i2] = window {
-//            match i1 {
-//                Inst::Add(ct1, 0) | Inst::Sub(ct1, 0) => match i0 {
-//                    Inst::Right(ct0) => match i2 {
-//                        Inst::Left(ct2) => {
-//                            if ct0 == ct2 {
-//                                match i1 {
-//                                    Inst::Add(_, _) => ir[idx] = Inst::Add(*ct1, *ct0 as i32),
-//                                    Inst::Sub(_, _) => ir[idx] = Inst::Sub(*ct1, *ct0 as i32),
-//                                    _ => (),
-//                                }
-//                                ir[idx + 1] = Inst::Nop;
-//                                ir[idx + 2] = Inst::Nop;
-//                            }
-//                        }
-//                        _ => (),
-//                    },
-//                    Inst::Left(ct0) => match i2 {
-//                        Inst::Right(ct2) => {
-//                            if ct0 == ct2 {
-//                                match i1 {
-//                                    Inst::Add(_, _) => ir[idx] = Inst::Add(*ct1, -(*ct0 as i32)),
-//                                    Inst::Sub(_, _) => ir[idx] = Inst::Sub(*ct1, -(*ct0 as i32)),
-//                                    _ => (),
-//                                }
-//                                ir[idx + 1] = Inst::Nop;
-//                                ir[idx + 2] = Inst::Nop;
-//                            }
-//                        }
-//                        _ => (),
-//                    },
-//                    _ => (),
-//                },
-//                _ => (),
-//            }
-//        }
-//    }
-//}
 
 pub fn cell_zero(ir: &IR) -> IR {
     let mut new_ir = ir.clone();
@@ -235,25 +201,17 @@ pub fn is_simple(ir: &IR, start: usize, end: usize) -> bool {
         ret = false;
     }
 
-    // TODO making sure the loops are extremely simple just for now
-    // this should be removed later
-    match loop_ins[0] {
-        Inst::Sub(1) => (),
-        _ => ret = false,
-    }
-
     let mut ptr_change: i32 = 0;
     let mut loop_ptr_changed = false;
     for ins in loop_ins {
         match ins {
             Inst::Right(ct) => ptr_change += *ct as i32,
             Inst::Left(ct) => ptr_change -= *ct as i32,
-            _ => (),
-        }
-        // TODO this may break if the ir gets more complicated
-        match ins {
-            Inst::Add(_) | Inst::Sub(_) => {
+            Inst::Add(ct) | Inst::Sub(ct) => {
                 if ptr_change == 0 {
+                    if *ct != 1 {
+                        ret = false;
+                    }
                     match loop_ptr_changed {
                         true => ret = false,
                         false => loop_ptr_changed = true,

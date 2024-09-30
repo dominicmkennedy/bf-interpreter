@@ -82,6 +82,7 @@ pub fn create_wasm(ir: &IR) -> Vec<u8> {
     wasm_bytes
 }
 
+// TODO https://rsms.me/wasm-intro#addressing-memory
 fn null_mem_arg() -> MemArg {
     MemArg {
         offset: 0,
@@ -133,7 +134,7 @@ fn add_or_sub_from(f: &mut Function, ct: usize, off: i32, i: &Instruction) {
     f.instruction(&Instruction::LocalGet(0));
     f.instruction(&Instruction::I32Load8U(null_mem_arg()));
     // mul loop number by count
-    if ct != 0 {
+    if ct != 1 {
         f.instruction(&Instruction::I32Const(ct as i32));
         f.instruction(&Instruction::I32Mul);
     }
@@ -171,19 +172,15 @@ fn set_0(f: &mut Function, off: i32) {
 
 fn dp_r(f: &mut Function, ct: usize) {
     f.instruction(&Instruction::LocalGet(0));
-    if ct != 0 {
-        f.instruction(&Instruction::I32Const(ct as i32));
-        f.instruction(&Instruction::I32Add);
-    }
+    f.instruction(&Instruction::I32Const(ct as i32));
+    f.instruction(&Instruction::I32Add);
     f.instruction(&Instruction::LocalSet(0));
 }
 
 fn dp_l(f: &mut Function, ct: usize) {
     f.instruction(&Instruction::LocalGet(0));
-    if ct != 0 {
-        f.instruction(&Instruction::I32Const(ct as i32));
-        f.instruction(&Instruction::I32Sub);
-    }
+    f.instruction(&Instruction::I32Const(ct as i32));
+    f.instruction(&Instruction::I32Sub);
     f.instruction(&Instruction::LocalSet(0));
 }
 
