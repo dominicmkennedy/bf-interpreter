@@ -9,7 +9,8 @@ function getChar() {
 
 const imports = {
   env: {
-    log: x => process.stdout.write(String.fromCharCode(x)),
+    debug_terminate: (cell_num, val) => console.log(`\nprogram terminated on cell: ${cell_num} with value: ${val}`),
+    write: x => process.stdout.write(String.fromCharCode(x)),
     read: () => getChar(),
   }
 };
@@ -17,9 +18,8 @@ const imports = {
 const wasmBuffer = fs.readFileSync('./rust_prog.wasm')
 WebAssembly.instantiate(wasmBuffer, imports).then(
   results => {
-    console.time("main")
+    console.time("wasm-run-time")
     results.instance.exports.main();
-    console.log("\n")
-    console.timeEnd("main")
+    console.timeEnd("wasm-run-time")
   }
 )

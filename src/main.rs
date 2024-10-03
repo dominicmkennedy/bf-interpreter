@@ -1,6 +1,6 @@
 use backend::create_wasm;
+use ir::{cell_zero, inst_combine, opt_simple_loops, parse, scan_opt};
 use ir::{Inst, IR};
-use ir::{cell_zero, inst_combine, opt_simple_loops, parse};
 use std::env;
 use std::error::Error;
 use std::fs;
@@ -30,10 +30,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut ir = parse(&program);
     ir = inst_combine(&ir);
     ir = cell_zero(&ir);
+    ir = scan_opt(&ir);
     ir = opt_simple_loops(&ir);
-    // ir = opt_simple_loops(&ir);
 
-    print_ir(&ir);
+    // print_ir(&ir);
 
     let wasm_bytes = create_wasm(&ir);
 

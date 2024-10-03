@@ -14,6 +14,7 @@ pub enum Inst {
     SimpleLoopStart(Offset),
     SimpleLoopEnd,
     Zero(Offset),
+    Scan(i32),
 }
 
 type Offset = i32;
@@ -107,11 +108,7 @@ fn single_loop_opt(ir: &IR) -> IR {
                 }
             }
             Inst::Zero(_) => new_ir.push(Inst::Zero(dp)),
-            // TODO should be able to run this opt to a fixpoint but this impl is wrong
-            // Inst::SimpleLoopStart(off) => new_ir.push(Inst::SimpleLoopStart(dp + off)),
-            // Inst::SimpleLoopEnd => new_ir.push(Inst::SimpleLoopEnd),
-            // Inst::AddFrom(ct, off) => new_ir.push(Inst::AddFrom(*ct, dp + off)),
-            // Inst::SubFrom(ct, off) => new_ir.push(Inst::SubFrom(*ct, dp + off)),
+            Inst::SubFrom(ct, off) => new_ir.push(Inst::SubFrom(*ct, dp + off)),
             _ => {
                 println!("{:?}", i);
                 assert!(false)
@@ -142,6 +139,54 @@ pub fn opt_simple_loops(ir: &IR) -> IR {
                 &new_ir[end_off as usize + 1..],
             ]
             .concat();
+        }
+    }
+
+    new_ir
+}
+
+pub fn scan_opt(ir: &IR) -> IR {
+    let mut new_ir = ir.clone();
+    let mut offset = 0;
+    for (idx, window) in ir.to_vec().windows(3).enumerate() {
+        if let [i0, i1, i2] = window {
+            if *i0 == Inst::LoopStart && *i2 == Inst::LoopEnd {
+                match i1 {
+                    // // Inst::Left(stride) => {
+                    // Inst::Left(1) => {
+                    //     new_ir = [
+                    //         &new_ir[0..idx - offset],
+                    //         // &[Inst::Scan(-(*stride as i32))],
+                    //         &[Inst::Scan(-1)],
+                    //         &new_ir[idx - offset + 3..],
+                    //     ]
+                    //     .concat();
+                    //     offset += 2;
+                    // }
+                    // Inst::Right(stride) => {
+                    Inst::Right(1) => {
+                        new_ir = [
+                            &new_ir[0..idx - offset],
+                            &[Inst::Scan(1)],
+                            // &[Inst::Scan(*stride as i32)],
+                            &new_ir[idx - offset + 3..],
+                        ]
+                        .concat();
+                        offset += 2;
+                    }
+                    Inst::Right(2) => {
+                        new_ir = [
+                            &new_ir[0..idx - offset],
+                            &[Inst::Scan(2)],
+                            // &[Inst::Scan(*stride as i32)],
+                            &new_ir[idx - offset + 3..],
+                        ]
+                        .concat();
+                        offset += 2;
+                    }
+                    _ => (),
+                }
+            }
         }
     }
 
