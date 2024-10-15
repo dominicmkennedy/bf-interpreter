@@ -7,6 +7,7 @@ use std::fs;
 mod backend;
 mod ir;
 
+// TODO make this look like John's IR output
 fn print_ir(ir: &IR) -> () {
     let mut loop_nest = 0;
     for i in ir.to_vec() {
@@ -30,8 +31,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut ir = parse(&program);
     ir = inst_combine(&ir);
     ir = cell_zero(&ir);
-    ir = scan_opt(&ir);
     ir = opt_simple_loops(&ir);
+    ir = scan_opt(&ir);
 
     // print_ir(&ir);
 

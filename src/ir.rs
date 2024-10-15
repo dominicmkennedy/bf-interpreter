@@ -1,6 +1,5 @@
 #[derive(PartialEq, Debug, Clone, Copy, Eq, PartialOrd, Ord)]
 pub enum Inst {
-    // SimpleLoop(Vec<Inst>, usize),
     Add(Count), // TODO maybe add offset, or range
     Sub(Count), // TODO maybe add offset, or range
     AddFrom(Count, Offset),
@@ -148,43 +147,31 @@ pub fn opt_simple_loops(ir: &IR) -> IR {
 pub fn scan_opt(ir: &IR) -> IR {
     let mut new_ir = ir.clone();
     let mut offset = 0;
+    let mut stride: Option<i32> = None;
+
     for (idx, window) in ir.to_vec().windows(3).enumerate() {
         if let [i0, i1, i2] = window {
             if *i0 == Inst::LoopStart && *i2 == Inst::LoopEnd {
                 match i1 {
-                    // // Inst::Left(stride) => {
-                    // Inst::Left(1) => {
-                    //     new_ir = [
-                    //         &new_ir[0..idx - offset],
-                    //         // &[Inst::Scan(-(*stride as i32))],
-                    //         &[Inst::Scan(-1)],
-                    //         &new_ir[idx - offset + 3..],
-                    //     ]
-                    //     .concat();
-                    //     offset += 2;
-                    // }
-                    // Inst::Right(stride) => {
-                    Inst::Right(1) => {
-                        new_ir = [
-                            &new_ir[0..idx - offset],
-                            &[Inst::Scan(1)],
-                            // &[Inst::Scan(*stride as i32)],
-                            &new_ir[idx - offset + 3..],
-                        ]
-                        .concat();
-                        offset += 2;
-                    }
-                    Inst::Right(2) => {
-                        new_ir = [
-                            &new_ir[0..idx - offset],
-                            &[Inst::Scan(2)],
-                            // &[Inst::Scan(*stride as i32)],
-                            &new_ir[idx - offset + 3..],
-                        ]
-                        .concat();
-                        offset += 2;
-                    }
+                    Inst::Left(s) => stride = Some(-(*s as i32)),
+                    Inst::Right(s) => stride = Some(*s as i32),
                     _ => (),
+                }
+                if stride == Some(1)
+                    || stride == Some(2)
+                    || stride == Some(4)
+                    || stride == Some(-1)
+                    || stride == Some(-2)
+                {
+                    new_ir = [
+                        &new_ir[0..idx - offset],
+                        &[Inst::Scan(stride.unwrap())],
+                        &new_ir[idx - offset + 3..],
+                    ]
+                    .concat();
+                    offset += 2;
+
+                    stride = None;
                 }
             }
         }

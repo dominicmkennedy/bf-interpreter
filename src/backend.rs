@@ -12,14 +12,19 @@ pub fn create_wasm(ir: &IR) -> Vec<u8> {
 
     // Encode the type section.
     let mut types = TypeSection::new();
+
     types.function([ValType::I32], []);
     let js_write = types.len() - 1;
+
     types.function([], [ValType::I32]);
     let js_read = types.len() - 1;
+
     types.function([ValType::I32, ValType::I32], []);
     let js_debug_terminate = types.len() - 1;
+
     types.function([], []);
     let bf_main = types.len() - 1;
+
     module.section(&types);
 
     let mut imports = ImportSection::new();
@@ -56,6 +61,9 @@ pub fn create_wasm(ir: &IR) -> Vec<u8> {
     let mut codes = CodeSection::new();
     let locals = vec![(1, ValType::I32), (1, ValType::I32)];
     let mut f = Function::new(locals);
+
+    f.instruction(&Instruction::I32Const(16));
+    f.instruction(&Instruction::LocalSet(DP));
 
     for ins in ir {
         match ins {
@@ -171,37 +179,54 @@ fn sub_from(f: &mut Function, ct: usize, off: i32) {
     add_or_sub_from(f, ct, off, &Instruction::I32Sub)
 }
 
-// TODO make this a wasm function maybe
 fn scan(f: &mut Function, stride: i32) {
-    if stride != 1 && stride != 2 {
+    if stride > 0 {
+        for_scan(f, stride);
+    } else {
+        rev_scan(f, stride);
+    }
+}
+
+fn rev_scan(f: &mut Function, stride: i32) {
+    if stride != -1 && stride != -2 {
         assert!(false);
     }
 
-    // Do the slow thing till it's aligned
+    simple_loop_start(f, 0);
+
+    // Set the dp back by one vector
+    f.instruction(&Instruction::LocalGet(DP));
+    f.instruction(&Instruction::I32Const(-16));
+    f.instruction(&Instruction::I32Add);
+    f.instruction(&Instruction::LocalSet(DP));
+
     f.instruction(&Instruction::Block(BlockType::Empty));
     f.instruction(&Instruction::Loop(BlockType::Empty));
 
-    // break if already zero
+    f.instruction(&Instruction::V128Const(0));
     f.instruction(&Instruction::LocalGet(DP));
-    f.instruction(&Instruction::I32Load8U(null_mem_arg()));
-    f.instruction(&Instruction::I32Eqz);
-    f.instruction(&Instruction::BrIf(1));
+    f.instruction(&Instruction::V128Load(null_mem_arg()));
+    f.instruction(&Instruction::I8x16Eq);
 
-    // break if mod 16 = 0
-    f.instruction(&Instruction::LocalGet(DP));
+    if stride == -2 {
+        f.instruction(&Instruction::V128Const(0x00FF00FF00FF00FF00FF00FF00FF00FF));
+        f.instruction(&Instruction::V128And);
+    }
+
+    f.instruction(&Instruction::I8x16Bitmask);
+    f.instruction(&Instruction::I32Clz);
+    f.instruction(&Instruction::I32Const(-16));
+    f.instruction(&Instruction::I32Add);
+
+    // if there is a value other than 16 then break
+    f.instruction(&Instruction::LocalTee(1));
     f.instruction(&Instruction::I32Const(16));
-    f.instruction(&Instruction::I32RemS);
-    f.instruction(&Instruction::I32Const(0));
     f.instruction(&Instruction::I32Ne);
     f.instruction(&Instruction::BrIf(1));
 
+    // Sub 16 to data pointer
     f.instruction(&Instruction::LocalGet(DP));
-    if stride == 1 {
-        f.instruction(&Instruction::I32Const(1));
-    }
-    if stride == 2 {
-        f.instruction(&Instruction::I32Const(2));
-    }
+    f.instruction(&Instruction::I32Const(-16));
     f.instruction(&Instruction::I32Add);
     f.instruction(&Instruction::LocalSet(DP));
 
@@ -209,22 +234,41 @@ fn scan(f: &mut Function, stride: i32) {
     f.instruction(&Instruction::End);
     f.instruction(&Instruction::End);
 
-    // Then let it rip
+    f.instruction(&Instruction::LocalGet(DP));
+    f.instruction(&Instruction::LocalGet(1));
+    f.instruction(&Instruction::I32Sub);
+    f.instruction(&Instruction::I32Const(15));
+    f.instruction(&Instruction::I32Add);
+    f.instruction(&Instruction::LocalSet(DP));
+
+    simple_loop_end(f);
+}
+
+fn for_scan(f: &mut Function, stride: i32) {
+    if stride != 1 && stride != 2 && stride != 4 {
+        assert!(false);
+    }
+
+    simple_loop_start(f, 0);
+
+    // TODO load the masks and the zero etc, outside the loop
     f.instruction(&Instruction::Block(BlockType::Empty));
     f.instruction(&Instruction::Loop(BlockType::Empty));
 
     f.instruction(&Instruction::V128Const(0));
     f.instruction(&Instruction::LocalGet(DP));
-    f.instruction(&Instruction::V128Load(MemArg {
-        offset: 0,
-        align: 4,
-        memory_index: 0,
-    }));
+    f.instruction(&Instruction::V128Load(null_mem_arg()));
     f.instruction(&Instruction::I8x16Eq);
+
     if stride == 2 {
         f.instruction(&Instruction::V128Const(0x00FF00FF00FF00FF00FF00FF00FF00FF));
         f.instruction(&Instruction::V128And);
     }
+    if stride == 4 {
+        f.instruction(&Instruction::V128Const(0x000000FF000000FF000000FF000000FF));
+        f.instruction(&Instruction::V128And);
+    }
+
     f.instruction(&Instruction::I8x16Bitmask);
     f.instruction(&Instruction::I32Ctz);
 
@@ -248,6 +292,8 @@ fn scan(f: &mut Function, stride: i32) {
     f.instruction(&Instruction::LocalGet(DP));
     f.instruction(&Instruction::I32Add);
     f.instruction(&Instruction::LocalSet(DP));
+
+    simple_loop_end(f);
 }
 
 fn set_0(f: &mut Function, off: i32) {

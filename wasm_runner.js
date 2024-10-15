@@ -9,7 +9,7 @@ function getChar() {
 
 const imports = {
   env: {
-    debug_terminate: (cell_num, val) => console.log(`\nprogram terminated on cell: ${cell_num} with value: ${val}`),
+    debug_terminate: (cell_num, val) => console.log(`\nprogram terminated on cell: ${cell_num - 16} with value: ${val}`),
     write: x => process.stdout.write(String.fromCharCode(x)),
     read: () => getChar(),
   }
