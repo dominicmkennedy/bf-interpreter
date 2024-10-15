@@ -7,6 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+clap = {version = "4.5.20", features = [ "derive" ]}
 wasm-bindgen = "0.2.93"
 wasm-encoder = "0.217.0"
 wasmparser = "0.217.0"
